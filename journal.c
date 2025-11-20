@@ -28,10 +28,14 @@ static circ_bbuf_t buf1; // request-buffer
 static circ_bbuf_t buf2; // journal metadata completed buffer
 static circ_bbuf_t buf3; // journal commit completed buffer
 
+// mutex locks and CVs for stages and threads 1, 2, 3
 static pthread_mutex_t stage1_lock;
 static pthread_cond_t stage1_cond;
 static pthread_mutex_t stage2_lock;
 static pthread_cond_t stage2_cond;
+static pthread_mutex_t stage3_lock;
+static pthread_cond_t stage3_cond;
+
 
 /*
 Thread 1: journal-metadata-write thread
@@ -79,6 +83,12 @@ static int stage1_flags() {
     return finished_four == 4;
 }
 
+static int stage3_flags() {
+    int finished_two = 
+        is_write_bitmap_complete + is_write_inode_complete;
+    return finished_two == 2;
+}
+
 /*
 For thread 1
 */
@@ -121,20 +131,26 @@ For thread 2
 */
 static void *journal_commit_write_thread(void *arg) {
     while(1) {
+        // buffer_get blocks untl something is available
+        // wait for buffer 2 to not be empty and remove request
         int write_id = buffer_get(&buf2);
 
+        // reset flags for stage 2
         pthread_mutex_lock(&stage2_lock);
         is_journal_txe_complete = 0;
         pthread_mutex_unlock(&stage2_lock);
 
+        // issue writing TxE to the journal
         issue_journal_txe(write_id);
 
+        // wait for issue to complete
         pthread_mutex_lock(&stage2_lock);
         while (!is_journal_txe_complete) {
             pthread_cond_wait(&stage2_cond, &stage2_lock);
         }
         pthread_mutex_unlock(&stage2_lock);
 
+        // put the request into buffer 3 (waits if nec.)
         buffer_put(&buf3, write_id);
     }
 
@@ -142,11 +158,35 @@ static void *journal_commit_write_thread(void *arg) {
 
 }
 
+/*
+For thread 3
+*/
 static void *checkpoint_metadata_thread(void *arg) {
     while(1) {
-        sleep(1);
-    }
+        // buffer_get blocks until something is available
+        // wait for buffer 3 to not be empty
+        int write_id = buffer_get(&buf3);
 
+        // reset flags for stage 2
+        pthread_mutex_lock(&stage3_lock);
+        is_write_bitmap_complete = 0;
+        is_write_inode_complete = 0;
+        pthread_mutex_unlock(&stage3_lock);
+
+        // issue writing the metadata
+        issue_write_bitmap(write_id);
+        issue_write_inode(write_id);
+
+        // wait for issues to complete
+        pthread_mutex_lock(&stage3_lock);
+        while (!stage3_flags()) {
+            pthread_cond_wait(&stage3_cond, &stage3_lock);
+        }
+        pthread_mutex_unlock(&stage3_lock);
+
+        // call write_complete()
+        write_complete(write_id);
+    }
     return NULL;
 }
 
@@ -202,10 +242,13 @@ void init_journal() {
     init_buffer(&buf2);
     init_buffer(&buf3);
 
+    // initialize mutex locks and CVs for threads 1, 2, 3 (stages)
     pthread_mutex_init(&stage1_lock, NULL);
     pthread_cond_init(&stage1_cond, NULL);
     pthread_mutex_init(&stage2_lock, NULL);
-    pthread_cond_intit(&stage2_cond, NULL);
+    pthread_cond_init(&stage2_cond, NULL);
+    pthread_mutex_init(&stage3_lock, NULL);
+    pthread_cond_init(&stage3_cond, NULL);
 
     pthread_create(&thread_1, NULL, journal_metadata_write_thread, NULL);
     pthread_create(&thread_2, NULL, journal_commit_write_thread, NULL);
@@ -260,11 +303,17 @@ void journal_txe_complete(int write_id) {
 }
 
 void write_bitmap_complete(int write_id) {
-        is_write_bitmap_complete = 1;
+    pthread_mutex_lock(&stage3_lock);
+    is_write_bitmap_complete = 1;
+    pthread_cond_signal(&stage3_cond);
+    pthread_mutex_unlock(&stage3_lock);
 }
 
 void write_inode_complete(int write_id) {
-        is_write_inode_complete = 1;
+    pthread_mutex_lock(&stage3_lock);
+    is_write_inode_complete = 1;
+    pthread_cond_signal(&stage3_cond);
+    pthread_mutex_unlock(&stage3_lock);
 }
 
 
