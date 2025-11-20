@@ -28,6 +28,42 @@ static circ_bbuf_t buf1; // request-buffer
 static circ_bbuf_t buf2; // journal metadata completed buffer
 static circ_bbuf_t buf3; // journal commit completed buffer
 
+/*
+Thread 1: journal-metadata-write thread
+Thread 1 should be an infinite loop that:
+ 1. waits for buffer 1 to not be empty
+ 2. removes the next request
+ 3. issues writing the requests data and
+   3b. journaling the requests metadata
+ 4. waits for all the issues to complete
+ 5. puts the request into buffer 2 (waiting if nec.)
+repeat.
+*/
+static pthread_t thread_1; //journal-metadate-write thread
+/*
+Thread 2: journal-commit-write-thread
+Thread 2  should be an infinite loop that:
+ 1. waits for buffer 2 to not be empty
+ 2. removes the next request
+ 3. issues writing TxE to the journal
+ 4. waits for the issue to complete
+ 5. puts the requests into buffer 3 (waiting if nec.)
+repeat.
+*/
+static pthread_t thread_2;
+/*
+Thread 3: checkpoint-metadata-thread
+Thread 3 should be another infinite loop that:
+ 1. waits for buffer 3 to not be empty
+ 2. removes the next request
+ 3. issues writing the metadata
+ 4. waits for the issues to complete
+ 5. calls write_complete()
+repeat.
+*/
+static pthread_t thread_3;
+
+
 // helper function(s) to follow specified producer/consumer pattern from the specifications 
 static void buffer_put(circ_bbuf_t *buff, int write_id) {
     pthread_mutex_lock(&buff->lock);
