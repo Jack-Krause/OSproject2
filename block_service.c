@@ -22,7 +22,7 @@ void issue_write_data(int write_id) {
 }
 
 void issue_journal_txe(int write_id) {
-	printf("issue journal txe %d\n"m write_id);
+	printf("issue journal txe %d\n", write_id);
 	journal_txe_complete(write_id);
 }
 
