@@ -64,6 +64,19 @@ repeat.
 static pthread_t thread_3;
 
 
+static void *journal_metadata_write_thread(void *arg) {
+
+}
+
+static void *journal_commit_write_thread(void *arg) {
+
+}
+
+static void *journal_metadata_thread(void *arg) {
+
+}
+
+
 // helper function(s) to follow specified producer/consumer pattern from the specifications 
 static void buffer_put(circ_bbuf_t *buff, int write_id) {
     pthread_mutex_lock(&buff->lock);
@@ -114,6 +127,10 @@ void init_journal() {
     init_buffer(&buf1);
     init_buffer(&buf2);
     init_buffer(&buf3);
+
+    pthread_create(&thread_1, NULL, journal_metadata_write_thread, "thread 1");
+    pthread_create(&thread_2, NULL, journal_commit_write_thread, "thread 2");
+    pthread_create(&thread_3, NULL, journal_metadata_thread, "thread 3");
 }
 
 
