@@ -28,6 +28,9 @@ static circ_bbuf_t buf1; // request-buffer
 static circ_bbuf_t buf2; // journal metadata completed buffer
 static circ_bbuf_t buf3; // journal commit completed buffer
 
+static pthread_mutex_t stage1_lock;
+static pthread_cond_t stage1_cond;
+
 /*
 Thread 1: journal-metadata-write thread
 Thread 1 should be an infinite loop that:
@@ -63,17 +66,51 @@ repeat.
 */
 static pthread_t thread_3;
 
-
+/*
+For thread 1
+*/
 static void *journal_metadata_write_thread(void *arg) {
+    while(1) {
+        // reset stage1 flags
+        pthread_mutex_lock(&stage1_lock);
+        is_write_data_complete = 0;
+        is_journal_txb_complete = 0;
+        is_journal_bitmap_complete = 0;
+        is_journal_inode_complete = 0;
+        pthread_mutex_onlock(&stage1_lock);
 
+
+        // buffer_get blocks until something is available
+        int write_id = buffer_get(&buf1);
+        // issue writing the request data
+        issue_write_data(write_id);
+        // issue journal request metadata
+        issue_journal_txb(write_id);
+        issue_journal_bitmap(write_id);
+        issue_journal_inode(write_id);
+        // TODO: wait for the thread to finish
+
+        // put the request into buffer2 (waiting if nec.)
+        buffer_put(&buf2, write_id);
+    }
+    return NULL; 
 }
 
 static void *journal_commit_write_thread(void *arg) {
+    while(1) {
+        sleep(1);
+    }
+
+    return NULL;
 
 }
 
-static void *journal_metadata_thread(void *arg) {
+static void *checkpoint_metadata_thread(void *arg) {
+    while(1) {
+        sleep(1);
+    }
 
+    return NULL;
 }
 
 
@@ -128,9 +165,12 @@ void init_journal() {
     init_buffer(&buf2);
     init_buffer(&buf3);
 
-    pthread_create(&thread_1, NULL, journal_metadata_write_thread, "thread 1");
-    pthread_create(&thread_2, NULL, journal_commit_write_thread, "thread 2");
-    pthread_create(&thread_3, NULL, journal_metadata_thread, "thread 3");
+    pthread_create(&thread_1, NULL, journal_metadata_write_thread, NULL);
+    pthread_create(&thread_2, NULL, journal_commit_write_thread, NULL);
+    pthread_create(&thread_3, NULL, checkpoint_metadata_thread, NULL);
+
+    pthread_mutex_init(&stage1_lock, NULL);
+    pthread_cond_init(&stage1_cond, NULL);
 }
 
 
@@ -145,19 +185,31 @@ void request_write(int write_id) {
  * disk).
  */
 void journal_txb_complete(int write_id) {
-        is_journal_txb_complete = 1;
+    pthread_mutex_lock(&stage1_lock);
+    is_journal_txb_complete = 1;
+    pthread_cond_signal(&stage1_cond);
+    pthread_mutex_unlock(&stage1_lock);    
 }
 
 void journal_bitmap_complete(int write_id) {
-        is_journal_bitmap_complete = 1;
+    pthread_mutex_lock(&stage1_lock);
+    is_journal_bitmap_complete = 1;
+    pthread_cond_signal(&stage1_cond);
+    pthread_mutex_unlock(&stage1_lock);    
 }
 
 void journal_inode_complete(int write_id) {
-        is_journal_inode_complete = 1;
+    pthread_mutex_lock(&stage1_lock);
+    is_journal_inode_complete = 1;
+    pthread_cond_signal(&stage1_cond);
+    pthread_mutex_unlock(&stage1_lock);    
 }
 
 void write_data_complete(int write_id) {
-        is_write_data_complete = 1;
+    pthread_mutex_lock(&stage1_lock);
+    is_write_data_complete = 1;
+    pthread_cond_signal(&stage1_cond);
+    pthread_mutex_unlock(&stage1_lock);    
 }
 
 void journal_txe_complete(int write_id) {
