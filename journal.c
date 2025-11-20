@@ -155,7 +155,6 @@ static void *journal_commit_write_thread(void *arg) {
     }
 
     return NULL;
-
 }
 
 /*
@@ -167,7 +166,7 @@ static void *checkpoint_metadata_thread(void *arg) {
         // wait for buffer 3 to not be empty
         int write_id = buffer_get(&buf3);
 
-        // reset flags for stage 2
+        // reset flags for stage 3
         pthread_mutex_lock(&stage3_lock);
         is_write_bitmap_complete = 0;
         is_write_inode_complete = 0;
@@ -208,6 +207,7 @@ static void buffer_put(circ_bbuf_t *buff, int write_id) {
     pthread_mutex_unlock(&buff->lock);
 }
 
+// consumer
 static int buffer_get(circ_bbuf_t *buff) {
     pthread_mutex_lock(&buff->lock);
 
