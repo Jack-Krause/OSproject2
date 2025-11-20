@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <pthread.h>
 #include "journal.h"
 
 int is_write_data_complete;
@@ -15,17 +16,38 @@ int is_write_inode_complete;
 // requirements: BUFFER_SIZE (journal.h) -> fixed-size buffers
 // implement as a simple array
 typedef struct {
-        uint8_t buffer[BUFFER_SIZE];
-        int head;
-        int tail;
-        const int maxlen;
+    uint8_t buffer[BUFFER_SIZE];
+    int head;
+    int tail;
+    const int maxlen;
+    int count; // how many items currently
+    pthread_mutex_t lock;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
 } circ_bbuf_t;
+
+static circ_bbuf_t buf1; // request-buffer
+static circ_bbuf_t buf2; // journal metadata completed buffer
+static circ_bbuf_t buf3; // journal commit completed buffer
 
 
 /* This function can be used to initialize the buffers and threads.
  */
 void init_journal() {
 	// initialize buffers and threads here
+    init_buffer(&buf1);
+    init_buffer(&buf2);
+    init_buffer(&buf3);
+
+
+
+}
+
+static void init_buffer(circ_bbuf_t *buff) {
+    buff->head = buff->tail = buff->count = 0;
+    pthread_mutex_init(&buff->lock, NULL);
+    pthread_cond_init(&buff->not_empty, NULL);
+    pthread_cont_init(&buff->not_full, NULL);
 }
 
 /* This function is called by the file system to request writing data to
