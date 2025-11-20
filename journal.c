@@ -72,7 +72,7 @@ repeat.
 */
 static pthread_t thread_3;
 
-
+// helper function to check if flags set
 static int stage1_flags() {
     // pthread_mutex_lock(&stage1_lock);
     int finished_four = 
@@ -83,110 +83,11 @@ static int stage1_flags() {
     return finished_four == 4;
 }
 
+// helper function to check if flags set
 static int stage3_flags() {
     int finished_two = 
         is_write_bitmap_complete + is_write_inode_complete;
     return finished_two == 2;
-}
-
-/*
-For thread 1
-*/
-static void *journal_metadata_write_thread(void *arg) {
-    while(1) {
-        // buffer_get blocks until something is available
-        int write_id = buffer_get(&buf1);
-
-        // reset stage1 flags
-        pthread_mutex_lock(&stage1_lock);
-        is_write_data_complete = 0;
-        is_journal_txb_complete = 0;
-        is_journal_bitmap_complete = 0;
-        is_journal_inode_complete = 0;
-        pthread_mutex_unlock(&stage1_lock);
-
-        // issue writing the request data
-        issue_write_data(write_id);
-
-        // issue journal request metadata
-        issue_journal_txb(write_id);
-        issue_journal_bitmap(write_id);
-        issue_journal_inode(write_id);
-
-        // wait for the thread to finish
-        pthread_mutex_lock(&stage1_lock);
-        while (!stage1_flags()) {
-            pthread_cond_wait(&stage1_cond, &stage1_lock);
-        }
-        pthread_mutex_unlock(&stage1_lock);
-
-        // put the request into buffer2 (waiting if nec.)
-        buffer_put(&buf2, write_id);
-    }
-    return NULL;
-}
-
-/*
-For thread 2
-*/
-static void *journal_commit_write_thread(void *arg) {
-    while(1) {
-        // buffer_get blocks untl something is available
-        // wait for buffer 2 to not be empty and remove request
-        int write_id = buffer_get(&buf2);
-
-        // reset flags for stage 2
-        pthread_mutex_lock(&stage2_lock);
-        is_journal_txe_complete = 0;
-        pthread_mutex_unlock(&stage2_lock);
-
-        // issue writing TxE to the journal
-        issue_journal_txe(write_id);
-
-        // wait for issue to complete
-        pthread_mutex_lock(&stage2_lock);
-        while (!is_journal_txe_complete) {
-            pthread_cond_wait(&stage2_cond, &stage2_lock);
-        }
-        pthread_mutex_unlock(&stage2_lock);
-
-        // put the request into buffer 3 (waits if nec.)
-        buffer_put(&buf3, write_id);
-    }
-
-    return NULL;
-}
-
-/*
-For thread 3
-*/
-static void *checkpoint_metadata_thread(void *arg) {
-    while(1) {
-        // buffer_get blocks until something is available
-        // wait for buffer 3 to not be empty
-        int write_id = buffer_get(&buf3);
-
-        // reset flags for stage 3
-        pthread_mutex_lock(&stage3_lock);
-        is_write_bitmap_complete = 0;
-        is_write_inode_complete = 0;
-        pthread_mutex_unlock(&stage3_lock);
-
-        // issue writing the metadata
-        issue_write_bitmap(write_id);
-        issue_write_inode(write_id);
-
-        // wait for issues to complete
-        pthread_mutex_lock(&stage3_lock);
-        while (!stage3_flags()) {
-            pthread_cond_wait(&stage3_cond, &stage3_lock);
-        }
-        pthread_mutex_unlock(&stage3_lock);
-
-        // call write_complete()
-        write_complete(write_id);
-    }
-    return NULL;
 }
 
 
@@ -226,6 +127,110 @@ static int buffer_get(circ_bbuf_t *buff) {
     return val_head;
 }
 
+
+/*
+For thread 1
+*/
+static void *journal_metadata_write_thread(void *arg) {
+    while(1) {
+        // buffer_get blocks until something is available
+        int write_id = buffer_get(&buf1);
+
+        // reset stage1 flags
+        pthread_mutex_lock(&stage1_lock);
+        is_write_data_complete = 0;
+        is_journal_txb_complete = 0;
+        is_journal_bitmap_complete = 0;
+        is_journal_inode_complete = 0;
+        pthread_mutex_unlock(&stage1_lock);
+
+        // issue writing the request data
+        issue_write_data(write_id);
+
+        // issue journal request metadata
+        issue_journal_txb(write_id);
+        issue_journal_bitmap(write_id);
+        issue_journal_inode(write_id);
+
+        // wait for the thread to finish
+        pthread_mutex_lock(&stage1_lock);
+        while (!stage1_flags()) {
+            pthread_cond_wait(&stage1_cond, &stage1_lock);
+        }
+        pthread_mutex_unlock(&stage1_lock);
+
+        // put the request into buffer2 (waiting if nec.)
+        buffer_put(&buf2, write_id);
+    }
+    return NULL;
+}
+
+
+/*
+For thread 2
+*/
+static void *journal_commit_write_thread(void *arg) {
+    while(1) {
+        // buffer_get blocks untl something is available
+        // wait for buffer 2 to not be empty and remove request
+        int write_id = buffer_get(&buf2);
+
+        // reset flags for stage 2
+        pthread_mutex_lock(&stage2_lock);
+        is_journal_txe_complete = 0;
+        pthread_mutex_unlock(&stage2_lock);
+
+        // issue writing TxE to the journal
+        issue_journal_txe(write_id);
+
+        // wait for issue to complete
+        pthread_mutex_lock(&stage2_lock);
+        while (!is_journal_txe_complete) {
+            pthread_cond_wait(&stage2_cond, &stage2_lock);
+        }
+        pthread_mutex_unlock(&stage2_lock);
+
+        // put the request into buffer 3 (waits if nec.)
+        buffer_put(&buf3, write_id);
+    }
+
+    return NULL;
+}
+
+
+/*
+For thread 3
+*/
+static void *checkpoint_metadata_thread(void *arg) {
+    while(1) {
+        // buffer_get blocks until something is available
+        // wait for buffer 3 to not be empty
+        int write_id = buffer_get(&buf3);
+
+        // reset flags for stage 3
+        pthread_mutex_lock(&stage3_lock);
+        is_write_bitmap_complete = 0;
+        is_write_inode_complete = 0;
+        pthread_mutex_unlock(&stage3_lock);
+
+        // issue writing the metadata
+        issue_write_bitmap(write_id);
+        issue_write_inode(write_id);
+
+        // wait for issues to complete
+        pthread_mutex_lock(&stage3_lock);
+        while (!stage3_flags()) {
+            pthread_cond_wait(&stage3_cond, &stage3_lock);
+        }
+        pthread_mutex_unlock(&stage3_lock);
+
+        // call write_complete()
+        write_complete(write_id);
+    }
+    return NULL;
+}
+
+
 // helper method for initializing the circular buffers
 static void init_buffer(circ_bbuf_t *buff) {
     buff->head = buff->tail = buff->count = 0;
@@ -233,6 +238,7 @@ static void init_buffer(circ_bbuf_t *buff) {
     pthread_cond_init(&buff->not_empty, NULL);
     pthread_cond_init(&buff->not_full, NULL);
 }
+
 
 /* This function can be used to initialize the buffers and threads.
  */
