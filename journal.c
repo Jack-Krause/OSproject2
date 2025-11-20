@@ -33,15 +33,34 @@ static void buffer_put(circ_bbuf_t *buff, int write_id) {
     pthread_mutex_lock(&buff->lock);
 
     // when the buffer is full, wait until it is not full
-    while(buff->count == BUFFER_SIZE) {
+    while (buff->count == BUFFER_SIZE) {
         pthread_cond_wait(&buff->not_full, &buff->lock);
     }
+
     buff->buffer[buff->tail] = write_id;
-    buff->tail = (buff->tail + 1) & BUFFER_SIZE;
+    buff->tail = (buff->tail + 1) % BUFFER_SIZE;
     buff->count++;
+
     pthread_cond_signal(&buff->not_empty);
     pthread_mutex_unlock(&buff->lock);
+}
 
+static int buffer_get(circ_bbuf_t *buff) {
+    pthread_mutex_lock(&buff->lock);
+
+    // when the buffer is empty, wait until it is not empty
+    while (buff->count == 0) {
+        pthread_cond_wait(&buff->not_empty, &buff->lock);
+    }
+    // continue with the assumption that the buffer isn't empty
+    int val_head = buff->buffer[buff->head];
+    buff->head = (buff->head + 1) % BUFFER_SIZE;
+    buff->count--;
+
+    pthread_cond_signal(&buff->not_full);
+    pthread_mutex_unlock(&buff->lock);
+
+    return val_head;
 }
 
 // helper method for initializing the circular buffers
