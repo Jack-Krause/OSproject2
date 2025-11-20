@@ -204,6 +204,8 @@ void init_journal() {
 
     pthread_mutex_init(&stage1_lock, NULL);
     pthread_cond_init(&stage1_cond, NULL);
+    pthread_mutex_init(&stage2_lock, NULL);
+    pthread_cond_intit(&stage2_cond, NULL);
 
     pthread_create(&thread_1, NULL, journal_metadata_write_thread, NULL);
     pthread_create(&thread_2, NULL, journal_commit_write_thread, NULL);
