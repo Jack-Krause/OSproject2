@@ -28,6 +28,20 @@ static circ_bbuf_t buf1; // request-buffer
 static circ_bbuf_t buf2; // journal metadata completed buffer
 static circ_bbuf_t buf3; // journal commit completed buffer
 
+// helper function(s) to follow specified producer/consumer pattern from the specifications 
+static void buffer_put(circ_bbuf_t *buff, int write_id) {
+    Pthread_mutex_lock(&buff->lock);
+
+    while(buff->count == BUFFER_SIZE) {
+        Pthread_cond_wait(&buff->not_empty, &buff->lock);
+    }
+    buff->buffer[buff->tail] = write_id;
+    buff->tail++;
+    Pthread_cond_signal(&buff->not_empty);
+    Pthread_mutex_unlock(&buff->lock);
+
+}
+
 // helper method for initializing the circular buffers
 static void init_buffer(circ_bbuf_t *buff) {
     buff->head = buff->tail = buff->count = 0;
@@ -43,9 +57,6 @@ void init_journal() {
     init_buffer(&buf1);
     init_buffer(&buf2);
     init_buffer(&buf3);
-
-
-
 }
 
 
