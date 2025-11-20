@@ -30,6 +30,8 @@ static circ_bbuf_t buf3; // journal commit completed buffer
 
 static pthread_mutex_t stage1_lock;
 static pthread_cond_t stage1_cond;
+static pthread_mutex_t stage2_lock;
+static pthread_cond_t stage2_cond;
 
 /*
 Thread 1: journal-metadata-write thread
@@ -114,9 +116,26 @@ static void *journal_metadata_write_thread(void *arg) {
     return NULL;
 }
 
+/*
+For thread 2
+*/
 static void *journal_commit_write_thread(void *arg) {
     while(1) {
-        sleep(1);
+        int write_id = buffer_get(&buf2);
+
+        pthread_mutex_lock(&stage2_lock);
+        is_journal_txe_complete = 0;
+        pthread_mutex_unlock(&stage2_lock);
+
+        issue_journal_txe(write_id);
+
+        pthread_mutex_lock(&stage2_lock);
+        while (!is_journal_txe_complete) {
+            pthread_cond_wait(&stage2_cond, &stage2_lock);
+        }
+        pthread_mutex_unlock(&stage2_lock);
+
+        buffer_put(&buf3, write_id);
     }
 
     return NULL;
@@ -232,7 +251,10 @@ void write_data_complete(int write_id) {
 }
 
 void journal_txe_complete(int write_id) {
-        is_journal_txe_complete = 1;
+    pthread_mutex_lock(&stage2_lock);
+    is_journal_txe_complete = 1;
+    pthread_cond_signal(&stage2_cond);
+    pthread_mutex_unlock(&stage2_lock);
 }
 
 void write_bitmap_complete(int write_id) {
