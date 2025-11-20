@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include "journal.h"
 
 int is_write_data_complete;
@@ -8,6 +9,18 @@ int is_journal_inode_complete;
 int is_journal_txe_complete;
 int is_write_bitmap_complete;
 int is_write_inode_complete;
+
+
+// add a struct for the circular buffer
+// requirements: BUFFER_SIZE (journal.h) -> fixed-size buffers
+// implement as a simple array
+typedef struct {
+        uint8_t buffer[BUFFER_SIZE];
+        int head;
+        int tail;
+        const int maxlen;
+} circ_bbuf_t;
+
 
 /* This function can be used to initialize the buffers and threads.
  */
