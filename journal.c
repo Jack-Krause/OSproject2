@@ -66,34 +66,52 @@ repeat.
 */
 static pthread_t thread_3;
 
+
+static int stage1_flags() {
+    // pthread_mutex_lock(&stage1_lock);
+    int finished_four = 
+        is_write_data_complete + 
+        is_journal_txb_complete + 
+        is_journal_bitmap_complete + 
+        is_journal_inode_complete;
+    return finished_four == 4;
+}
+
 /*
 For thread 1
 */
 static void *journal_metadata_write_thread(void *arg) {
     while(1) {
+        // buffer_get blocks until something is available
+        int write_id = buffer_get(&buf1);
+
         // reset stage1 flags
         pthread_mutex_lock(&stage1_lock);
         is_write_data_complete = 0;
         is_journal_txb_complete = 0;
         is_journal_bitmap_complete = 0;
         is_journal_inode_complete = 0;
-        pthread_mutex_onlock(&stage1_lock);
+        pthread_mutex_unlock(&stage1_lock);
 
-
-        // buffer_get blocks until something is available
-        int write_id = buffer_get(&buf1);
         // issue writing the request data
         issue_write_data(write_id);
+
         // issue journal request metadata
         issue_journal_txb(write_id);
         issue_journal_bitmap(write_id);
         issue_journal_inode(write_id);
-        // TODO: wait for the thread to finish
+
+        // wait for the thread to finish
+        pthread_mutex_lock(&stage1_lock);
+        while (!stage1_flags()) {
+            pthread_cond_wait(&stage1_cond, &stage1_lock);
+        }
+        pthread_mutex_unlock(&stage1_lock);
 
         // put the request into buffer2 (waiting if nec.)
         buffer_put(&buf2, write_id);
     }
-    return NULL; 
+    return NULL;
 }
 
 static void *journal_commit_write_thread(void *arg) {
@@ -165,12 +183,13 @@ void init_journal() {
     init_buffer(&buf2);
     init_buffer(&buf3);
 
+    pthread_mutex_init(&stage1_lock, NULL);
+    pthread_cond_init(&stage1_cond, NULL);
+
     pthread_create(&thread_1, NULL, journal_metadata_write_thread, NULL);
     pthread_create(&thread_2, NULL, journal_commit_write_thread, NULL);
     pthread_create(&thread_3, NULL, checkpoint_metadata_thread, NULL);
 
-    pthread_mutex_init(&stage1_lock, NULL);
-    pthread_cond_init(&stage1_cond, NULL);
 }
 
 
