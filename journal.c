@@ -13,7 +13,7 @@ switch this to 1 for testing requirement in 2.2
 Note: this behavior seems to be non-deterministic. It may require several runs
 for the buffer to fill up and show in the output.
 */
-#define ACTIVATE_DELAY 1 // set to 0 for submission (default behavior)
+#define ACTIVATE_DELAY 0 // set to 0 for submission (default behavior)
 
 int is_write_data_complete;
 int is_journal_txb_complete;
