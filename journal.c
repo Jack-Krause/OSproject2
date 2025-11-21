@@ -97,9 +97,9 @@ static void buffer_put(circ_bbuf_t *buff, int write_id) {
 
     // when the buffer is full, wait until it is not full
     static int print_stuck_msg = 1;
-    while (buff->count == BUFFER_SIZE && print_stuck_msg) {
-        if (buff == &buf2) {
-            printf("thread stuck because of full buffer\n");
+    while (buff->count == BUFFER_SIZE) {
+        if (buff == &buf2 && print_stuck_msg) {
+            printf("2.2 TEST: thread stuck because of full buffer\n");
             print_stuck_msg = 0;
         }
         pthread_cond_wait(&buff->not_full, &buff->lock);
