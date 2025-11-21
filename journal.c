@@ -2,6 +2,19 @@
 #include <pthread.h>
 #include "journal.h"
 
+
+/*
+ACTIVATE_DELAY
+FOR GRADERS:
+switch this to 0 for default behavior
+
+switch this to 1 for testing requirement in 2.2
+1 delays first TXE to try to fill buffer 2
+Note: this behavior seems to be non-deterministic. It may require several runs
+for the buffer to fill up and show in the output.
+*/
+#define ACTIVATE_DELAY 1 // set to 0 for submission (default behavior)
+
 int is_write_data_complete;
 int is_journal_txb_complete;
 int is_journal_bitmap_complete;
@@ -95,13 +108,18 @@ static int stage3_flags() {
 static void buffer_put(circ_bbuf_t *buff, int write_id) {
     pthread_mutex_lock(&buff->lock);
 
-    // when the buffer is full, wait until it is not full
+#if ACTIVATE_DELAY // == 1
     static int print_stuck_msg = 1;
+#endif
+
+    // when the buffer is full, wait until it is not full
     while (buff->count == BUFFER_SIZE) {
+#if ACTIVATE_DELAY // == 1
         if (buff == &buf2 && print_stuck_msg) {
-            printf("2.2 TEST: thread stuck because of full buffer\n");
+            printf("---2.2 TEST: thread stuck because of full buffer---\n");
             print_stuck_msg = 0;
         }
+#endif
         pthread_cond_wait(&buff->not_full, &buff->lock);
     }
 
@@ -307,9 +325,6 @@ void write_data_complete(int write_id) {
 }
 
 void journal_txe_complete(int write_id) {
-    printf("[CB] journal_txe_complete %d\n", write_id);
-    fflush(stdout);
-
     pthread_mutex_lock(&stage2_lock);
     is_journal_txe_complete = 1;
     pthread_cond_signal(&stage2_cond);
@@ -317,9 +332,6 @@ void journal_txe_complete(int write_id) {
 }
 
 void write_bitmap_complete(int write_id) {
-    printf("[CB] write_bitmap_complete %d\n", write_id);
-    fflush(stdout);
-
     pthread_mutex_lock(&stage3_lock);
     is_write_bitmap_complete = 1;
     pthread_cond_signal(&stage3_cond);
@@ -327,9 +339,6 @@ void write_bitmap_complete(int write_id) {
 }
 
 void write_inode_complete(int write_id) {
-    printf("[CB] write_inode_complete %d\n", write_id);
-    fflush(stdout);
-
     pthread_mutex_lock(&stage3_lock);
     is_write_inode_complete = 1;
     pthread_cond_signal(&stage3_cond);
