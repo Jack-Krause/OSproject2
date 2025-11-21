@@ -266,6 +266,17 @@ static void init_buffer(circ_bbuf_t *buff) {
 /* This function can be used to initialize the buffers and threads.
  */
 void init_journal() {
+#if ACTIVATE_DELAY // == 1
+    printf("NOTE: testing functionality (2.2) is active.\n");
+    printf("-- Disable this functionality by setting ACTIVATE_DELAY => 0\n");
+    printf("-- in journal.c and block_service.c\n");
+#else // ACTIVATE_DELAY == 0
+    printf("NOTE: testing functionality (2.2) is disabled.\n");
+    printf("-- Enable this functionality by setting ACTIVATE_DELAY => 1\n");
+    printf("-- in journal.c and block_service.c\n");
+#endif
+
+
 	// initialize buffers and threads here
     init_buffer(&buf1);
     init_buffer(&buf2);
