@@ -302,6 +302,9 @@ void write_data_complete(int write_id) {
 }
 
 void journal_txe_complete(int write_id) {
+    printf("[CB] journal_txe_complete %d\n", write_id);
+    fflush(stdout);
+
     pthread_mutex_lock(&stage2_lock);
     is_journal_txe_complete = 1;
     pthread_cond_signal(&stage2_cond);
@@ -309,6 +312,9 @@ void journal_txe_complete(int write_id) {
 }
 
 void write_bitmap_complete(int write_id) {
+    printf("[CB] write_bitmap_complete %d\n", write_id);
+    fflush(stdout);
+
     pthread_mutex_lock(&stage3_lock);
     is_write_bitmap_complete = 1;
     pthread_cond_signal(&stage3_cond);
@@ -316,6 +322,9 @@ void write_bitmap_complete(int write_id) {
 }
 
 void write_inode_complete(int write_id) {
+    printf("[CB] write_inode_complete %d\n", write_id);
+    fflush(stdout);
+
     pthread_mutex_lock(&stage3_lock);
     is_write_inode_complete = 1;
     pthread_cond_signal(&stage3_cond);
