@@ -64,7 +64,7 @@ void issue_journal_txe(int write_id) {
 		journal_txe_complete(write_id);
 	}
 }
-#else // ACTIVATE_TEST == 0
+#else // ACTIVATE_DELAY == 0
 void issue_journal_txe(int write_id) {
 	printf("issue journal txe %d\n", write_id);
 	journal_txe_complete(write_id);
