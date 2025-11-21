@@ -1,4 +1,6 @@
 #include <stdio.h>
+#include <pthread.h>
+#include <unistd.h> //  needed for sleep(1)
 #include "journal.h"
 
 void issue_journal_txb(int write_id) {
@@ -21,10 +23,33 @@ void issue_write_data(int write_id) {
 	write_data_complete(write_id);
 }
 
-void issue_journal_txe(int write_id) {
-	printf("issue journal txe %d\n", write_id);
+void *delayed_txe(void *arg) {
+	int write_id = *(int *) arg;
+	sleep(1);
 	journal_txe_complete(write_id);
+	return NULL;
 }
+
+void issue_journal_txe(int write_id) {
+	printf("issue journal txe (modified) %d\n", write_id);
+
+	static int ids[1024];
+	static int first = 1;
+
+	// only delay for the first txe
+	if (first) {
+		first = 0;
+		ids[write_id] = write_id;
+		pthread_t thread_a;
+		pthread_create(&thread_a, NULL, delayed_txe, &ids[write_id]);
+		pthread_detach(thread_a);
+		// the above should cause buffer 2 to fill up and thread1 to be stuck waiting
+		// journal_txe_complete(write_id);
+	} else {
+		journal_txe_complete(write_id);
+	}
+}
+
 
 void issue_write_bitmap(int write_id) {
 	printf("issue write bitmap %d\n", write_id);
