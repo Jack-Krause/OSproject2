@@ -11,6 +11,7 @@ issue write data 0
 issue journal txb 0
 issue journal bitmap 0
 issue journal inode 0
+requesting test write 9
 issue write data 1
 issue journal txb 1
 issue journal bitmap 1
@@ -41,16 +42,17 @@ issue journal bitmap 7
 issue journal inode 7
 issue write data 8
 issue journal txb 8
-requesting test write 9
+issue journal bitmap 8
+issue journal inode 8
 requesting test write 10
+issue write data 9
 requesting test write 11
 requesting test write 12
 requesting test write 13
 requesting test write 14
-requesting test write 15
-issue journal bitmap 8
-issue journal txe (modified) 0
-issue journal inode 8
-issue write data 9
 issue journal txb 9
 issue journal bitmap 9
+issue journal inode 9
+issue journal txe (modified) 0
+2.2 TEST: thread stuck because of full buffer
+requesting test write 15
